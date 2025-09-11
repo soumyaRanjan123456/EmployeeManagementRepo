@@ -1,1 +1,57 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'Maven-3.9.11'
+        jdk 'JDK17'
+    }
+
+    environment {
+        DOCKER_IMAGE = "ajith0010804/java-app:${BUILD_NUMBER}"
+        JAR_FILE = "crud-practice-0.0.1-SNAPSHOT.jar"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                bat "mvn clean package -DskipTests"
+            }
+        }
+
+        stage('Docker Build & Push') {
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            bat "docker build -t %DOCKER_USER%/java-app:${BUILD_NUMBER} ."
+             echo "🔑 Logging in to Docker Hub..."
+            bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
+             echo "📤 Pushing Docker image..."
+            bat "docker push %DOCKER_USER%/java-app:${BUILD_NUMBER}"
+        }
+    }
+}
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig-file']) {
+                    bat "kubectl apply -f java-app.yaml"
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+        success {
+            echo '✅ Pipeline succeeded!'
+        }
+    }
+}
 
